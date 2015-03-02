@@ -7,14 +7,22 @@ from .exceptions import AMQPError
 
 
 class AMQP(asyncio.Protocol):
-    def __init__(self, dispatcher, loop):
+    def __init__(self, dispatcher, loop, close_callback=None):
         self.dispatcher = dispatcher
         self.partial_frame = b''
         self.frame_reader = FrameReader()
+        self._close_callback = close_callback
         self.heartbeat_monitor = HeartbeatMonitor(self, loop, 0)
 
     def connection_made(self, transport):
         self.transport = transport
+
+    def connection_lost(self, exc):
+        if self._close_callback:
+            # _close_callback now only accepts coroutines
+            asyncio.async(self._close_callback(exc))
+
+        super().connection_lost(exc)
 
     def data_received(self, data):
         while data:
